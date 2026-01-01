@@ -1,0 +1,17 @@
+[project]
+name = "protovertop"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.3.5",
+    "alglib @ file:///D:/repos/alglib/4.06/native-core-wrappers",
+    "pytest>=9.0.2",
+    "matplotlib>=3.10.8",
+    "ipykernel>=7.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
