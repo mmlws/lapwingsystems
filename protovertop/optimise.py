@@ -1,14 +1,10 @@
-from typing import List
-
 import numpy as np
 import xalglib as alg
-from xalglib import minqpaddlc2
 
 from areafit import areafit_cut, areafit_fill
-from groundprofile import GroundProfile, gp_elevation_at
-from vertprofile import VerticalProfile, vp_num_segments, vp_segment_lengths, vp_num_stations, vp_stations, \
-    vp_segment_index, vp_segment_start_station
 from crosssection import xs_cut_areas, xs_fill_areas
+from groundprofile import GroundProfile, gp_elevation_at
+from vertprofile import VerticalProfile, vp_num_segments, vp_segment_lengths, vp_num_stations, vp_stations
 
 
 def optimise(gp: GroundProfile, vp: VerticalProfile):
