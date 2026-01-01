@@ -1,0 +1,15 @@
+#ifdef FADE25D_EXPORT
+#error FADE25D_EXPORT is defined
+#endif
+
+#pragma once
+#define GEOM_TRUE 100
+#define GEOM_FALSE 99
+#undef GEOM_PSEUDO3D
+#define GEOM_PSEUDO3D GEOM_TRUE
+
+#define FADE_VERSION_MAJ 2
+#define FADE_VERSION_MIN 17
+#define FADE_VERSION_REV 0
+#define FADE_VERSION_NUM 21700
+#define FADE_VERSION_STR "2.17.0"
