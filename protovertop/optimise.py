@@ -214,6 +214,9 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
         coeffs = [1, 1, -1]
         alg.minqpaddlc2(opt_state, indices, coeffs, len(indices), 0.0, 0.0)
 
+    # scaling factors for each station
+    v_scale_factors = []
+
     # cut volume constraints
     # - fit offset vs cut area to cross-section samples
     # - transform area fit to volume fit using station spacing
@@ -252,6 +255,9 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
         b_vals = [-b, 1.0]
         alg.minqpaddqc2list(opt_state, q_rows, q_cols, q_vals, 1, True,  b_idx, b_vals, 2, c, 0, False)
 
+        k = max(abs(2*a*min_offset + b), abs(2*a*max_offset + b))
+        v_scale_factors.append(k)
+
 
     # fill volume constraints
     # - fit offset vs fill area to cross-section samples
@@ -289,8 +295,41 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
         b_vals = [-b, 1.0]
         alg.minqpaddqc2list(opt_state, q_rows, q_cols, q_vals, 1, True, b_idx, b_vals, 2, c, 0, False)
 
+        k = max(abs(2*a*min_offset + b), abs(2*a*max_offset + b))
+        v_scale_factors.append(k)
+
     # Borrow and waste pit capacity constraints
     for i in range(num_stations):
         alg.minqpaddlc2(opt_state, [fb_p[i], fb_n[i]], [1, 1], 2, 0, borrow_capacity)
         alg.minqpaddlc2(opt_state, [fw_p[i], fw_n[i]], [1, 1], 2, 0, waste_capacity)
 
+    # setup variable scaling (default 1)
+    scaling = np.ones(num_vars)
+
+    mean_ds = np.mean(np.diff(stations))
+    scaling[a1] = 1/mean_ds
+    scaling[a2] = 1/(mean_ds*mean_ds)
+
+    v_scale_factors = np.array(v_scale_factors)
+    v_scale_factors = np.clip(v_scale_factors, 1.0, 1e10)
+    v_scale_mean = np.sqrt(np.mean(v_scale_factors**2))
+
+    for i in range(num_stations):
+        scaling[v_cut[i]] = v_scale_mean
+        scaling[v_fill[i]] = v_scale_mean
+
+        scaling[ft_p[i]] = v_scale_mean
+        scaling[ft_n[i]] = v_scale_mean
+
+        scaling[fu_p[i]] = v_scale_mean
+        scaling[fu_n[i]] = v_scale_mean
+        scaling[fl_p[i]] = v_scale_mean
+        scaling[fl_n[i]] = v_scale_mean
+
+        scaling[fb_p[i]] = v_scale_mean
+        scaling[fb_n[i]] = v_scale_mean
+
+        scaling[fw_p[i]] = v_scale_mean
+        scaling[fw_n[i]] = v_scale_mean
+
+    alg.minqpsetscale(opt_state, scaling)
