@@ -4,30 +4,49 @@ import xalglib as alg
 from areafit import areafit_cut, areafit_fill
 from crosssection import xs_cut_areas, xs_fill_areas
 from groundprofile import GroundProfile, gp_elevation_at
+from result import OptimizationResult
 from vertprofile import VerticalProfile, vp_num_segments, vp_segment_lengths, vp_num_stations, vp_stations
+from pwquadratic import pwq_set_coeffs
+from problem import OptimisationProblem
 
 
-def optimise(gp: GroundProfile, vp: VerticalProfile):
+def optimise(gp: GroundProfile, vp: VerticalProfile, problem: OptimisationProblem = None):
+    """
+    Optimize vertical alignment to minimize earthwork cost.
 
-    cost_cut = 12.0     # $/m3
-    cost_fill = 10.0    # $/m3
-    cost_load = 5.0     # $/m3
-    cost_haul = 5.0     # $/m
-    cost_borrow = 15.0  # $/m3
-    cost_waste = 8.0    # $/m3
+    Args:
+        gp: Ground profile (elevation vs. station)
+        vp: Initial vertical profile (will be optimized)
+        problem: Optimization problem parameters (costs, constraints)
+                 If None, uses OptimisationProblem.default()
 
-    min_offset = -4.0
-    max_offset = 4.0
+    Returns:
+        OptimizationResult with optimized vertical alignment
+    """
+    if problem is None:
+        problem = OptimisationProblem.default()
 
-    g_min = -0.1
-    g_max = 0.1
+    # Read problem parameters
+    cost_cut = problem.cost_cut
+    cost_fill = problem.cost_fill
+    cost_load = problem.cost_load
+    cost_haul = problem.cost_haul
+    cost_borrow = problem.cost_borrow
+    cost_waste = problem.cost_waste
 
-    k_sag = 5
-    k_crest = 5
+    min_offset = problem.min_offset
+    max_offset = problem.max_offset
 
-    # waste/borrow pits
-    borrow_capacity = 0.0
-    waste_capacity = 0.0
+    g_min = problem.g_min
+    g_max = problem.g_max
+
+    k_min_crest = problem.k_min_crest
+    k_min_sag = problem.k_min_sag
+
+    borrow_capacity = problem.borrow_capacity
+    waste_capacity = problem.waste_capacity
+
+    num_samples = problem.num_samples
 
     d = vp_segment_lengths(vp)
     stations = vp_stations(vp)
@@ -36,7 +55,7 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
 
     num_vars = 0
     def create_variables(count):
-        global num_vars
+        nonlocal num_vars
         variables = np.arange(count) + num_vars
         num_vars += count
         return variables
@@ -79,7 +98,7 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
 
     # all variables
     opt_state = alg.minqpcreate(num_vars)
-    alg.minqpsetalgosparsegenipm(opt_state, 0.0)
+    alg.minqpsetalgosparsegenipm(opt_state, 1e-10)
 
     # Objective Function
     # sum (p + y) Vcut_j + q Vfill_j + c d_j (ft+_j + ft-_j)
@@ -152,11 +171,11 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
         coeffs = [1, 2*ds]
         alg.minqpaddlc2(opt_state, indices, coeffs, 2, g_min, g_max)
 
-    # curvature constraints
-    for i in range(0, num_stations):
-        lb = -1/(200*k_crest)
-        ub = 1/(200*k_sag)
-        alg.minqpsetbci(opt_state, [a2[i]], lb, ub)
+    # Box constraints - vertical curvature
+    lb = -1.0 / (200.0 * k_min_crest)  # Crest curves (negative a2)
+    ub = 1.0 / (200.0 * k_min_sag)     # Sag curves (positive a2)
+    for i in range(0, num_segments):
+        alg.minqpsetbci(opt_state, a2[i], lb, ub)
 
     # gap equality constraints
     # P(s_i) - Z_i = u_i
@@ -231,7 +250,6 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
     # - transform area fit to volume fit using station spacing
     # - add offset slack variable box and linear constraint relating to offset
     # - add quadratic volume constraint
-    num_samples = 20
     sample_offsets = np.linspace(min_offset, max_offset, num_samples)
     for i in range(0, num_stations):
         s = stations[i]
@@ -262,7 +280,7 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
         q_vals = [-a]
         b_idx = [u_cut[i], v_cut[i]]
         b_vals = [-b, 1.0]
-        alg.minqpaddqc2list(opt_state, q_rows, q_cols, q_vals, 1, True,  b_idx, b_vals, 2, c, 0, False)
+        alg.minqpaddqc2list(opt_state, q_rows, q_cols, q_vals, 1, True,  b_idx, b_vals, 2, c, np.inf, False)
 
         k = max(abs(2*a*min_offset + b), abs(2*a*max_offset + b))
         v_scale_factors.append(k)
@@ -302,7 +320,7 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
         q_vals = [-a]
         b_idx = [u_fill[i], v_fill[i]]
         b_vals = [-b, 1.0]
-        alg.minqpaddqc2list(opt_state, q_rows, q_cols, q_vals, 1, True, b_idx, b_vals, 2, c, 0, False)
+        alg.minqpaddqc2list(opt_state, q_rows, q_cols, q_vals, 1, True, b_idx, b_vals, 2, c, np.inf, False)
 
         k = max(abs(2*a*min_offset + b), abs(2*a*max_offset + b))
         v_scale_factors.append(k)
@@ -327,9 +345,6 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
         scaling[v_cut[i]] = v_scale_mean
         scaling[v_fill[i]] = v_scale_mean
 
-        scaling[ft_p[i]] = v_scale_mean
-        scaling[ft_n[i]] = v_scale_mean
-
         scaling[fu_p[i]] = v_scale_mean
         scaling[fu_n[i]] = v_scale_mean
         scaling[fl_p[i]] = v_scale_mean
@@ -341,4 +356,92 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
         scaling[fw_p[i]] = v_scale_mean
         scaling[fw_n[i]] = v_scale_mean
 
+    for j in range(num_segments):
+        scaling[ft_p[j]] = v_scale_mean
+        scaling[ft_n[j]] = v_scale_mean
+
     alg.minqpsetscale(opt_state, scaling)
+
+    # logging
+    alg.trace_file("GENIPM.DETAILED", "D:/repos/lapwingsystems/protovertop/trace.log")
+
+    # Solve the quadratic program
+    alg.minqpoptimize(opt_state)
+    x, rep = alg.minqpresults(opt_state)
+    x = np.array(x)
+
+    # Check solution status
+    if rep.terminationtype <= 0:
+        raise RuntimeError(f"Optimization failed: termination type {rep.terminationtype}")
+
+    # Extract solution variables
+    a0_sol = x[a0]
+    a1_sol = x[a1]
+    a2_sol = x[a2]
+
+    v_cut_sol = x[v_cut]
+    v_fill_sol = x[v_fill]
+    u_sol = x[u]
+    u_cut_sol = x[u_cut]
+    u_fill_sol = x[u_fill]
+
+    ft_p_sol = x[ft_p]
+    ft_n_sol = x[ft_n]
+    fl_p_sol = x[fl_p]
+    fl_n_sol = x[fl_n]
+    fu_p_sol = x[fu_p]
+    fu_n_sol = x[fu_n]
+    fb_p_sol = x[fb_p]
+    fb_n_sol = x[fb_n]
+    fw_p_sol = x[fw_p]
+    fw_n_sol = x[fw_n]
+
+    # Update the vertical profile piecewise quadratic with optimized coefficients
+    pwq_set_coeffs(vp.pwq, a0_sol, a1_sol, a2_sol)
+
+    # Calculate detailed costs
+    cut_cost_total = np.sum(v_cut_sol) * (cost_cut + cost_load)
+    fill_cost_total = np.sum(v_fill_sol) * cost_fill
+    haul_cost_total = np.sum((ft_p_sol + ft_n_sol) * d) * cost_haul
+    borrow_cost_total = np.sum(fb_p_sol + fb_n_sol) * cost_borrow
+    waste_cost_total = np.sum(fw_p_sol + fw_n_sol) * cost_waste
+    total_cost = cut_cost_total + fill_cost_total + haul_cost_total + borrow_cost_total + waste_cost_total
+
+    # Return optimization result
+    return OptimizationResult(
+        success=(rep.terminationtype > 0),
+        termination_type=rep.terminationtype,
+        inner_iteration_count=rep.inneriterationscount,
+        outer_iteration_count=rep.outeriterationscount,
+        lagrange_bc=np.array(rep.lagbc),
+        lagrange_lc=np.array(rep.laglc),
+        lagrange_qc=np.array(rep.lagqc),
+        objective_value=rep.f,
+        a0=a0_sol,
+        a1=a1_sol,
+        a2=a2_sol,
+        u=u_sol,
+        v_cut=v_cut_sol,
+        v_fill=v_fill_sol,
+        u_cut=u_cut_sol,
+        u_fill=u_fill_sol,
+        ft_p=ft_p_sol,
+        ft_n=ft_n_sol,
+        fl_p=fl_p_sol,
+        fl_n=fl_n_sol,
+        fu_p=fu_p_sol,
+        fu_n=fu_n_sol,
+        fb_p=fb_p_sol,
+        fb_n=fb_n_sol,
+        fw_p=fw_p_sol,
+        fw_n=fw_n_sol,
+        total_cost=total_cost,
+        cut_cost=cut_cost_total,
+        fill_cost=fill_cost_total,
+        haul_cost=haul_cost_total,
+        borrow_cost=borrow_cost_total,
+        waste_cost=waste_cost_total,
+        num_segments=num_segments,
+        num_stations=num_stations,
+        stations=stations
+    )
