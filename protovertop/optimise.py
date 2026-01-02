@@ -22,6 +22,9 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
     g_min = -0.1
     g_max = 0.1
 
+    k_sag = 5
+    k_crest = 5
+
     # waste/borrow pits
     borrow_capacity = 0.0
     waste_capacity = 0.0
@@ -148,6 +151,12 @@ def optimise(gp: GroundProfile, vp: VerticalProfile):
         indices = [a1[seg], a2[seg]]
         coeffs = [1, 2*ds]
         alg.minqpaddlc2(opt_state, indices, coeffs, 2, g_min, g_max)
+
+    # curvature constraints
+    for i in range(0, num_stations):
+        lb = -1/(200*k_crest)
+        ub = 1/(200*k_sag)
+        alg.minqpsetbci(opt_state, [a2[i]], lb, ub)
 
     # gap equality constraints
     # P(s_i) - Z_i = u_i
