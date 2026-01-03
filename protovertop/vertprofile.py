@@ -3,7 +3,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from pwquadratic import (PWQuadratic, pwq_create, pwq_eval, pwq_num_segments, pwq_segment_lengths, pwq_num_stations,
+from pwquadratic import (PWQuadratic, pwq_create, pwq_eval, pwq_evald, pwq_evaldd,
+                         pwq_num_segments, pwq_segment_lengths, pwq_num_stations,
                          pwq_stations, pwq_segment_index, pwq_segment_start_station)
 
 
@@ -25,6 +26,16 @@ def vp_stations(vp: VerticalProfile):
 
 def vp_elevation_at(vp: VerticalProfile, station: Union[float, np.ndarray]):
     return pwq_eval(vp.pwq, station)
+
+
+def vp_gradient_at(vp: VerticalProfile, station: Union[float, np.ndarray]):
+    """Evaluate gradient (first derivative) at station"""
+    return pwq_evald(vp.pwq, station)
+
+
+def vp_curvature_at(vp: VerticalProfile, station: Union[float, np.ndarray]):
+    """Evaluate curvature (second derivative) at station"""
+    return pwq_evaldd(vp.pwq, station)
 
 
 def vp_num_segments(vp: VerticalProfile):

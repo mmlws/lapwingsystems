@@ -28,14 +28,22 @@ def pwq_create(stations: np.ndarray):
                        a0=a0, a1=a1, a2=a2)
 
 
-def pwq_create_from_coeffs(segment_stations: np.ndarray, a0: np.ndarray, a1: np.ndarray, a2: np.ndarray):
-    num_segments = len(segment_stations) - 1
-    i_sorted = np.argsort(segment_stations)
-    segment_stations = segment_stations[i_sorted]
-    a0 = a0[i_sorted]
-    a1 = a1[i_sorted]
-    a2 = a2[i_sorted]
-    return PWQuadratic(num_segments=num_segments, stations=segment_stations, a0=a0, a1=a1, a2=a2)
+def pwq_create_from_coeffs(stations: np.ndarray, a0: np.ndarray, a1: np.ndarray, a2: np.ndarray):
+    """
+    Create a PWQuadratic from segment stations and coefficients.
+    Assumes segment_stations are already sorted.
+    Makes copies of all input arrays.
+    """
+    num_segments = len(stations) - 1
+    segment_stations = np.column_stack([stations[:-1], stations[1:]])
+    return PWQuadratic(
+        num_segments=num_segments,
+        stations=stations.copy(),
+        segment_stations=segment_stations,
+        a0=a0.copy(),
+        a1=a1.copy(),
+        a2=a2.copy()
+    )
 
 
 def pwq_stations(pwq: PWQuadratic):
