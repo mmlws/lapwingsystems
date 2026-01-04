@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="lwsfade25d/build/lwsfade25d.vcxproj" />
+  <Project Path="test/test.csproj" />
+  <Project Path="testexe/build/testexe.vcxproj" />
+</Solution>
