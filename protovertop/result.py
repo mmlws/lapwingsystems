@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import timedelta
 
 import numpy as np
 
@@ -15,6 +16,9 @@ class OptimizationResult:
     lagrange_lc: np.ndarray
     lagrange_qc: np.ndarray
     objective_value: float
+
+    setup_time: timedelta
+    solve_time: timedelta
 
     # Vertical profile coefficients
     a0: np.ndarray  # Constant coefficients [num_segments]

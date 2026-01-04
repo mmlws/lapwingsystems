@@ -7,7 +7,7 @@ class OptimisationProblem:
     cost_cut: float = 12.0  # Excavation cost ($/m³)
     cost_fill: float = 10.0  # Fill/embankment cost ($/m³)
     cost_load: float = 5.0  # Loading cost ($/m³)
-    cost_haul: float = 5.0  # Hauling cost per meter ($/m)
+    cost_haul: float = 5.0  # Hauling cost per km ($/(m3.km))
     cost_borrow: float = 15.0  # Borrow pit material cost ($/m³)
     cost_waste: float = 8.0  # Waste disposal cost ($/m³)
 

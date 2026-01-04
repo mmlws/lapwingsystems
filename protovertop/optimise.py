@@ -1,3 +1,6 @@
+import datetime
+import time
+
 import numpy as np
 import xalglib as alg
 
@@ -23,6 +26,8 @@ def optimise(gp: GroundProfile, vp: VerticalProfile, problem: OptimisationProble
     Returns:
         OptimizationResult with optimized vertical alignment
     """
+    start_setup = time.perf_counter()
+
     if problem is None:
         problem = OptimisationProblem.default()
 
@@ -48,7 +53,7 @@ def optimise(gp: GroundProfile, vp: VerticalProfile, problem: OptimisationProble
 
     num_samples = problem.num_samples
 
-    d = vp_segment_lengths(vp)
+    segment_lengths_km = vp_segment_lengths(vp) / 1000.0     # km
     stations = vp_stations(vp)
     num_segments = vp_num_segments(vp)
     num_stations = vp_num_stations(vp)
@@ -106,8 +111,8 @@ def optimise(gp: GroundProfile, vp: VerticalProfile, problem: OptimisationProble
     cost_vec = np.zeros(num_vars)
     cost_vec[v_cut] = cost_cut+cost_load
     cost_vec[v_fill] = cost_fill
-    cost_vec[ft_p] = cost_haul*d
-    cost_vec[ft_n] = cost_haul*d
+    cost_vec[ft_p] = cost_haul*segment_lengths_km
+    cost_vec[ft_n] = cost_haul*segment_lengths_km
     cost_vec[fw_p] = cost_waste
     cost_vec[fw_n] = cost_waste
     cost_vec[fb_p] = cost_borrow
@@ -363,10 +368,12 @@ def optimise(gp: GroundProfile, vp: VerticalProfile, problem: OptimisationProble
     alg.minqpsetscale(opt_state, scaling)
 
     # logging
-    alg.trace_file("GENIPM.DETAILED", "D:/repos/lapwingsystems/protovertop/trace.log")
+    # alg.trace_file("GENIPM.DETAILED", "D:/repos/lapwingsystems/protovertop/trace.log")
 
     # Solve the quadratic program
+    start_solve = time.perf_counter()
     alg.minqpoptimize(opt_state)
+    end_solve = time.perf_counter()
     x, rep = alg.minqpresults(opt_state)
     x = np.array(x)
 
@@ -402,13 +409,18 @@ def optimise(gp: GroundProfile, vp: VerticalProfile, problem: OptimisationProble
     # Calculate detailed costs
     cut_cost_total = np.sum(v_cut_sol) * (cost_cut + cost_load)
     fill_cost_total = np.sum(v_fill_sol) * cost_fill
-    haul_cost_total = np.sum((ft_p_sol + ft_n_sol) * d) * cost_haul
+    haul_cost_total = np.sum((ft_p_sol + ft_n_sol) * segment_lengths_km) * cost_haul
     borrow_cost_total = np.sum(fb_p_sol + fb_n_sol) * cost_borrow
     waste_cost_total = np.sum(fw_p_sol + fw_n_sol) * cost_waste
     total_cost = cut_cost_total + fill_cost_total + haul_cost_total + borrow_cost_total + waste_cost_total
 
+    setup_time_s = datetime.timedelta(seconds=start_solve-start_setup)
+    solve_time_s = datetime.timedelta(seconds=end_solve-start_solve)
+
     # Return optimization result
     return OptimizationResult(
+        setup_time=setup_time_s,
+        solve_time=solve_time_s,
         success=(rep.terminationtype > 0),
         termination_type=rep.terminationtype,
         inner_iteration_count=rep.inneriterationscount,
