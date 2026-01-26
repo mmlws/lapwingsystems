@@ -1,9 +1,9 @@
 
-// (c) 2010 Geom e.U. Bernhard Kornberger, Graz/Austria. All rights reserved.
+// (c) 2010 Geom Software Bernhard Kornberger, Graz/Austria. All rights reserved.
 //
-// This file is part of the Fade2D library. You can use it for your personal
-// non-commercial, non-military research. Don't redistribute without explicit
-// permission. 
+// This file is part of the Fade2D library. The licensee mentioned below may use 
+// this license file in accordance with the commercial license agreement. This 
+// license file is personalized. DO NOT SHARE IT. 
 
 // This software is provided AS IS with NO WARRANTY OF ANY KIND, INCLUDING 
 // THE WARRANTY OF DESIGN, MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
@@ -11,12 +11,14 @@
 // Please contact the author if any conditions of this licensing are not clear 
 // to you.
 // 
-// Author: Bernhard Kornberger, bkorn (at) geom.at 
-//         C++ Freelancer
-// http://www.geom.at/products/fade2d/
-//
-// * Please remember to put a link to Fade on your research website *
-//
+// Geom Software e.U.
+// Dipl.-Ing. Dr. Bernhard Kornberger
+// Raiffeisenstrasse 19
+// A-8010 Graz / Austria
+// bkorn@geom.at 
+// 
+// https://www.geom.at/fade2d/html/
+// https://www.geom.at/fade25d/html/
 
 
 #pragma once 
@@ -29,17 +31,17 @@ namespace{
 	namespace GEOM_LIC=GEOM_FADE2D;
 #endif
 
-struct License
-{
-License()
-{
-	GEOM_LIC::setLic(
-		"[NonCommercialResearch]",
-		"[LicType,student],[2D,1e6],[25D,1e5],[MeshGen,5e4],[Voronoi,1e5],[SegCheck,5e4],[CutFill,1e4],[SRECON,5e5]",
-		"[LF:F/C]",
-		"5303992d",
-		"f08786e8");
-	}
-};
-License lic;
+	struct License
+	{
+		License()
+		{
+			GEOM_LIC::setLic(
+				"Lapwing Systems;38 Witney St;Prospect NSW 2148;Australia;",
+				"[LicType,commercial],[2D,max],[25D,max],[Voronoi,0],[MeshGen,0],[CutFill,max],[SegCheck,max]",
+				"[LF:F/C]",
+				"8f928fbe",
+				"49b594fe");
+		}
+	};
+	License lic;
 }

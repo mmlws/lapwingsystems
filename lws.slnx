@@ -1,5 +1,20 @@
 <Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="LWS.Fade25D.Rhino3dm/LWS.Fade25D.Rhino3dm.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
+  <Project Path="LWS.Fade25D.Test/LWS.Fade25D.Test.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
+  <Project Path="LWS.VerticalProfileOptimisation/LWS.VerticalProfileOptimisation.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
   <Project Path="lwsfade25d/build/lwsfade25d.vcxproj" />
-  <Project Path="test/test.csproj" />
+  <Project Path="test/test.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
   <Project Path="testexe/build/testexe.vcxproj" />
 </Solution>

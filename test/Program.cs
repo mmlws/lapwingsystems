@@ -1,2 +1,2 @@
-﻿using LWSFade25D;
+﻿using LWS.Fade25D;
 Console.WriteLine($"Fade25D Version = {Util.GetVersion()}");

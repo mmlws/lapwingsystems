@@ -2,7 +2,7 @@
 
 using namespace System;
 
-namespace LWSFade25D
+namespace LWS::Fade25D
 {
     public ref class Util
     {

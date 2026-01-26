@@ -2,7 +2,7 @@
 #include <fade25d/freeFunctions.h>
 
 using namespace System;
-using namespace LWSFade25D;
+using namespace LWS::Fade25D;
 
 String^ Util::GetVersion()
 {
