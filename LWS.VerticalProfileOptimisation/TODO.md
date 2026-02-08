@@ -1,0 +1,13 @@
+﻿# Tasks
+- [X] Basic flat test (result should be flat)
+- [ ] Extract out everything from solution vector into a data structure we can easily inspect
+- [ ] Cross-section plotting (at any station given an alignment and profile)
+- [ ] Profile plotting (terrain + centerline + extents of cross-section)
+- [ ] Mass haul diagram plotting
+- [X] Sloped terrain at constant gradient (result should be at constant gradient)
+- [ ] Sinusoidal terrain (run in RoadEng with identical model settings)
+- [ ] Some sort of GUI to render alignment, profile, section at the same time
+- [ ] Comment more thoroughly especially the theory, equations
+- [ ] Add multiple haul roads
+- [ ] Add multiple access track support
+- [ ] Add intersection support

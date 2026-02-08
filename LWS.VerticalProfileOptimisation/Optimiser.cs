@@ -13,6 +13,26 @@ public class Optimiser
 {
     public List<string> Errors = [];
 
+    // Solution arrays (populated after Optimise)
+    public double[] SolA0 = [];
+    public double[] SolA1 = [];
+    public double[] SolA2 = [];
+    public double[] SolVCut = [];
+    public double[] SolVFill = [];
+    public double[] SolU = [];
+    public double[] SolUFill = [];
+    public double[] SolUCut = [];
+    public double[] SolFtP = [];
+    public double[] SolFtN = [];
+    public double[] SolFlP = [];
+    public double[] SolFlN = [];
+    public double[] SolFuP = [];
+    public double[] SolFuN = [];
+    public double[] SolFbP = [];
+    public double[] SolFbN = [];
+    public double[] SolFwP = [];
+    public double[] SolFwN = [];
+
     public Optimiser()
     {
         //
@@ -391,12 +411,32 @@ public class Optimiser
             return null;
         }
 
-        // Extract solution into PWQuadratic
+        // Extract solution into arrays
+        SolA0 = Gather(x, a0);
+        SolA1 = Gather(x, a1);
+        SolA2 = Gather(x, a2);
+        SolVCut = Gather(x, vCut);
+        SolVFill = Gather(x, vFill);
+        SolU = Gather(x, u);
+        SolUFill = Gather(x, uFill);
+        SolUCut = Gather(x, uCut);
+        SolFtP = Gather(x, ftP);
+        SolFtN = Gather(x, ftN);
+        SolFlP = Gather(x, flP);
+        SolFlN = Gather(x, flN);
+        SolFuP = Gather(x, fuP);
+        SolFuN = Gather(x, fuN);
+        SolFbP = Gather(x, fbP);
+        SolFbN = Gather(x, fbN);
+        SolFwP = Gather(x, fwP);
+        SolFwN = Gather(x, fwN);
+
+        // Populate PWQuadratic from extracted coefficients
         for (var i = 0; i < numSegments; i++)
         {
-            vp.A0[i] = x[a0[i]];
-            vp.A1[i] = x[a1[i]];
-            vp.A2[i] = x[a2[i]];
+            vp.A0[i] = SolA0[i];
+            vp.A1[i] = SolA1[i];
+            vp.A2[i] = SolA2[i];
         }
 
         return new OptResult

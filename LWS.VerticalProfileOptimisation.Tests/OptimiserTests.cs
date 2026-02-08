@@ -47,4 +47,50 @@ public class OptimiserTests
                 $"Segment {i}: expected near-zero curvature, got A2={profile.A2[i]}");
         }
     }
+
+    [Fact]
+    public void SlopedTerrain_StraightRoad_ProfileFollowsSlope()
+    {
+        const double gradient = 0.05; // 5% slope along X
+        using var terrain = TerrainFactory.SlopedX(size: 1000, baseHeight: 100, gradient: gradient);
+
+        // Straight 500m road along X axis, centered at origin
+        var ha = new HorizontalAlignment();
+        ha.AddPoint(new Pt2d(-250, 0));
+        ha.AddPoint(new Pt2d(250, 0));
+        ha.Refresh();
+
+        var cost = new OptCostModel();
+        var model = new OptModel
+        {
+            AccessTracks =
+            [
+                new AccessTrackOptModel
+                {
+                    Alignment = ha,
+                    XSectionParams = new XSectionParams(),
+                    CostModel = cost
+                }
+            ],
+            CostModels = [cost],
+        };
+
+        var optimiser = new Optimiser();
+        var result = optimiser.Optimise(terrain, model);
+
+        Assert.NotNull(result);
+        Assert.Empty(optimiser.Errors);
+        Assert.Single(result.VerticalProfiles);
+
+        var profile = result.VerticalProfiles[0];
+        for (var i = 0; i < profile.NumSegments; i++)
+        {
+            // Grade should match terrain slope
+            Assert.True(Math.Abs(profile.A1[i] - gradient) < 0.001,
+                $"Segment {i}: expected grade ~{gradient}, got A1={profile.A1[i]}");
+            // Curvature should be near zero (constant slope)
+            Assert.True(Math.Abs(profile.A2[i]) < 0.001,
+                $"Segment {i}: expected near-zero curvature, got A2={profile.A2[i]}");
+        }
+    }
 }
