@@ -4,6 +4,7 @@ using LWS.Geometry;
 namespace LWS.VerticalProfileOptimisation;
 
 public delegate double GetTerrainHeightFn(double x, double y);
+
 public delegate Pt3d? RayShootFn(Pt3d from, Vec3d dir);
 
 public struct CutFillAreas(double cut, double fill)
@@ -16,7 +17,12 @@ public class XSectionPoints
 {
     public List<Pt3d> Left = [];
     public List<Pt3d> Right = [];
-    public void Clear() { Left.Clear(); Right.Clear(); }
+
+    public void Clear()
+    {
+        Left.Clear();
+        Right.Clear();
+    }
 }
 
 public class XSectionCalculator
@@ -70,6 +76,7 @@ public class XSectionCalculator
             var pt = result.Left[i];
             result.Left[i] = new Pt3d(pt.X, pt.Y, pt.Z - xs.Strip);
         }
+
         for (var i = 0; i < result.Right.Count; i++)
         {
             var pt = result.Right[i];
@@ -123,7 +130,7 @@ public class XSectionCalculator
         return new CutFillAreas(cutArea, fillArea);
     }
 
-    public CutFillAreas ComputeAreas(XSectionParams xs, Frame3d frame)
+    public CutFillAreas ComputeCutFillAreas(XSectionParams xs, Frame3d frame)
     {
         ComputePoints(xs, frame, _xsPoints);
         var leftAreas = ComputeCutFillAreasInternal(_xsPoints.Left);
@@ -133,24 +140,84 @@ public class XSectionCalculator
             leftAreas.Fill + rightAreas.Fill);
     }
 
-    public CutFillAreas[] ComputeAreasAtOffsets(
-        HorizontalAlignment ha, double station, XSectionParams xs,
-        double minOffset, double maxOffset, int count)
+    public CutFillAreas[] ComputeCutFillAreasAtOffsets(
+        HorizontalAlignment ha, XSectionParams xs, double station,
+        double[] offsets)
     {
         var f2d = ha.FrameAt(station);
         var terrainHeight = _terrain.GetHeight(f2d.Origin);
         var f3d = f2d.ToFrame3d();
 
-        var results = new CutFillAreas[count];
-        var stepSize = (maxOffset - minOffset) / (count - 1);
+        var results = new CutFillAreas[offsets.Length];
 
-        for (var i = 0; i < count; i++)
+        for (var i = 0; i < offsets.Length; i++)
         {
-            var offset = minOffset + stepSize * i;
-            f3d.Origin.Z = terrainHeight + offset;
-            results[i] = ComputeAreas(xs, f3d);
+            f3d.Origin.Z = terrainHeight + offsets[i];
+            results[i] = ComputeCutFillAreas(xs, f3d);
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Fit a quadratic to cut area vs offset samples (positive areas only).
+    /// Returns coefficients [c, b, a] where area = c + b*u + a*u²,
+    /// and uOffset = the root where the quadratic crosses zero (lower root).
+    /// </summary>
+    public void QuadraticFitCutArea(double[] offsets, double[] areas, out double[] posCoeffs, out double uOffset)
+    {
+        // Filter to positive area samples
+        var filtU = new List<double>();
+        var filtV = new List<double>();
+        for (var i = 0; i < offsets.Length; i++)
+        {
+            if (areas[i] > 0)
+            {
+                filtU.Add(offsets[i]);
+                filtV.Add(areas[i]);
+            }
+        }
+
+        alglib.polynomialfit(filtU.ToArray(), filtV.ToArray(), filtU.Count, 3, out var poly, out _);
+        alglib.polynomialbar2pow(poly, 0.0, 1.0, out var coeffArr);
+
+        var c = coeffArr[0];
+        var b = coeffArr[1];
+        var a = coeffArr[2];
+
+        // Lower root: (-b - sqrt(b²-4ac)) / 2a
+        uOffset = (-b - Math.Sqrt(b * b - 4 * a * c)) / (2 * a);
+        posCoeffs = coeffArr;
+    }
+
+    /// <summary>
+    /// Fit a quadratic to fill area vs offset samples (positive areas only).
+    /// Returns coefficients [c, b, a] where area = c + b*u + a*u²,
+    /// and uOffset = the root where the quadratic crosses zero (upper root).
+    /// </summary>
+    public void QuadraticFitFillArea(double[] offsets, double[] areas, out double[] posCoeffs, out double uOffset)
+    {
+        // Filter to positive area samples
+        var filtU = new List<double>();
+        var filtV = new List<double>();
+        for (var i = 0; i < offsets.Length; i++)
+        {
+            if (areas[i] > 0)
+            {
+                filtU.Add(offsets[i]);
+                filtV.Add(areas[i]);
+            }
+        }
+
+        alglib.polynomialfit(filtU.ToArray(), filtV.ToArray(), filtU.Count, 3, out var poly, out _);
+        alglib.polynomialbar2pow(poly, 0.0, 1.0, out var coeffArr);
+
+        var c = coeffArr[0];
+        var b = coeffArr[1];
+        var a = coeffArr[2];
+
+        // Upper root: (-b + sqrt(b²-4ac)) / 2a
+        uOffset = (-b + Math.Sqrt(b * b - 4 * a * c)) / (2 * a);
+        posCoeffs = coeffArr;
     }
 }

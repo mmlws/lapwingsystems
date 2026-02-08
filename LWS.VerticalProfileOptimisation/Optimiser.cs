@@ -1,25 +1,24 @@
+using System.Diagnostics;
 using LWS.Fade25D;
 using static LWS.VerticalProfileOptimisation.UtilArray;
 
 namespace LWS.VerticalProfileOptimisation;
 
-public class OptimiserResult
+public class OptResult
 {
-    public required PWQuadratic VerticalProfile;
+    public required List<PWQuadratic> VerticalProfiles;
 }
 
 public class Optimiser
 {
-    readonly TerrainMesh _terrain;
-
     public List<string> Errors = [];
 
-    public Optimiser(TerrainMesh terrain)
+    public Optimiser()
     {
-        _terrain = terrain;
+        //
     }
 
-    public OptimiserResult? Optimise(OptModel model)
+    public OptResult? Optimise(TerrainMesh terrain, OptModel model)
     {
         Errors.Clear();
 
@@ -33,12 +32,12 @@ public class Optimiser
         var xs = track.XSectionParams;
 
         // Build the vertical profile station layout
-        var vp = new PWQuadratic(ha.StartStation, 20.0, ha.StartStation + ha.Length);
+        var vp = new PWQuadratic(ha.StartStation, track.StationSpacing, ha.StartStation + ha.Length);
         var numSegments = vp.NumSegments;
         var numStations = vp.Stations.Count;
         var segmentLengths = vp.SegmentLengths();
 
-        var inf = double.PositiveInfinity;
+        const double inf = double.PositiveInfinity;
 
         // Constraint buffers (reassigned via collection expressions)
         int[] indices;
@@ -64,8 +63,8 @@ public class Optimiser
         var uCut = CreateVariables(numStations);
 
         // Transient flow
-        var ftP = CreateVariables(numStations);
-        var ftN = CreateVariables(numStations);
+        var ftP = CreateVariables(numSegments);
+        var ftN = CreateVariables(numSegments);
 
         // Loading flows (load from section)
         var flP = CreateVariables(numStations);
@@ -90,7 +89,7 @@ public class Optimiser
         #region Objective Function
         var costHaulSegments = new double[segmentLengths.Length];
         for (var i = 0; i < segmentLengths.Length; i++)
-            costHaulSegments[i] = segmentLengths[i] * cost.CostHaul;
+            costHaulSegments[i] = segmentLengths[i] / 1000.0 * cost.CostHaul;
 
         var costVec = new double[numVars];
         Scatter(costVec, vCut, cost.CostCut + cost.CostLoad);
@@ -176,7 +175,7 @@ public class Optimiser
         {
             var s = vp.Stations[i];
             var haPt = ha.PointAt(s);
-            var terrainHeight = _terrain.GetHeight(haPt);
+            var terrainHeight = terrain.GetHeight(haPt);
             var seg = Math.Min(i, numSegments - 1);
             var ds = s - vp.Stations[seg];
             indices = [a0[seg], a1[seg], a2[seg], u[i]];
@@ -242,57 +241,151 @@ public class Optimiser
         }
         #endregion
 
-        #region Cut/Fill Volume Constraints
-        var xsCalc = new XSectionCalculator(_terrain);
+        #region Borrow/Waste Capacity Constraints
+        for (var i = 0; i < numStations; i++)
+        {
+            alglib.minqpaddlc2(optState, [fbP[i], fbN[i]], [1, 1], 2, 0, track.BorrowCapacity);
+            alglib.minqpaddlc2(optState, [fwP[i], fwN[i]], [1, 1], 2, 0, track.WasteCapacity);
+        }
+        #endregion
+
+        #region Cut/Fill Volume Constraints (Quadratic)
+        var xsCalc = new XSectionCalculator(terrain);
+        var sampleOffsets = new double[track.NumSamplesVerticalOffset];
+        var stepSize = (track.MaxOffset - track.MinOffset) / (track.NumSamplesVerticalOffset - 1);
+        for (var j = 0; j < track.NumSamplesVerticalOffset; j++)
+            sampleOffsets[j] = track.MinOffset + stepSize * j;
+
+        var vScaleFactors = new List<double>();
+        
         for (var i = 0; i < numStations; i++)
         {
             var s = vp.Stations[i];
-            var areas = xsCalc.ComputeAreasAtOffsets(
-                ha, s, xs,
-                track.MinOffset, track.MaxOffset,
-                model.NumSamplesVerticalOffsets);
+            var allAreas = xsCalc.ComputeCutFillAreasAtOffsets(ha, xs, s, sampleOffsets);
 
-            var stepSize = (track.MaxOffset - track.MinOffset) / (model.NumSamplesVerticalOffsets - 1);
-            for (var j = 0; j < model.NumSamplesVerticalOffsets; j++)
+            // Cut constraints
             {
-                var offset = track.MinOffset + stepSize * j;
-                // v_cut >= areas[j].Cut when u[i] == offset
-                // Linearised: v_cut >= Cut_j  (when u == offset_j)
-                // This is a hockey-stick linearisation:
-                //   v_cut - dCut/du * u >= Cut_j - dCut/du * offset_j
-                // For adjacent samples, approximate the slope
+                // Extract cut areas and filter to positive values for fitting
+                var cutAreas = new double[allAreas.Length];
+                for (var j = 0; j < allAreas.Length; j++)
+                    cutAreas[j] = allAreas[j].Cut;
+
+                xsCalc.QuadraticFitCutArea(sampleOffsets, cutAreas, out var posCoeffs, out var uOffset);
+
+                // Convert area fit to volume fit using station spacing (midpoint integration)
+                var nextStation = i < numStations - 1 ? vp.Stations[i + 1] : s;
+                var prevStation = i > 0 ? vp.Stations[i - 1] : s;
+                var length = (nextStation - prevStation) / 2.0;
+                var c = posCoeffs[0] * length;
+                var b = posCoeffs[1] * length;
+                var a = posCoeffs[2] * length;
+                
+                Debug.Assert(a > 0);
+
+                // Slack variable constraint: u_cut <= u
+                alglib.minqpaddlc2(optState, [uCut[i], u[i]], [1.0, -1.0], 2, double.NegativeInfinity, 0);
+                // Slack variable box: min_offset <= u_cut <= u_offset
+                alglib.minqpsetbci(optState, uCut[i], track.MinOffset, uOffset);
+
+                // Quadratic volume constraint: v_cut - a*uc^2 - b*uc >= c
+                alglib.minqpaddqc2list(optState,
+                    [uCut[i]], [uCut[i]], [-a], 1, true,
+                    [uCut[i], vCut[i]], [-b, 1.0], 2,
+                    c, inf, 
+                    false);
+
+                var k = Math.Max(Math.Abs(2 * a * track.MinOffset + b), Math.Abs(2 * a * track.MaxOffset + b));
+                vScaleFactors.Add(k);
             }
-
-            // Piecewise-linear outer approximation of cut/fill as functions of offset
-            for (var j = 0; j < model.NumSamplesVerticalOffsets - 1; j++)
+            
+            // Fill Constraints
             {
-                var offset1 = track.MinOffset + stepSize * j;
-                var offset2 = track.MinOffset + stepSize * (j + 1);
+                // Extract fill areas and filter to positive values for fitting
+                var fillAreas = new double[allAreas.Length];
+                for (var j = 0; j < allAreas.Length; j++)
+                    fillAreas[j] = allAreas[j].Fill;
 
-                // Cut constraint: v_cut >= linear interpolation between samples
-                var cutSlope = (areas[j + 1].Cut - areas[j].Cut) / (offset2 - offset1);
-                var cutIntercept = areas[j].Cut - cutSlope * offset1;
-                // v_cut >= cutSlope * u + cutIntercept
-                // v_cut - cutSlope * u >= cutIntercept
-                indices = [vCut[i], u[i]];
-                coeffs = [1, -cutSlope];
-                alglib.minqpaddlc2(optState, indices, coeffs, 2, cutIntercept, inf);
+                xsCalc.QuadraticFitFillArea(sampleOffsets, fillAreas, out var posCoeffs, out var uOffset);
 
-                // Fill constraint: v_fill >= fillSlope * u + fillIntercept
-                var fillSlope = (areas[j + 1].Fill - areas[j].Fill) / (offset2 - offset1);
-                var fillIntercept = areas[j].Fill - fillSlope * offset1;
-                indices = [vFill[i], u[i]];
-                coeffs = [1, -fillSlope];
-                alglib.minqpaddlc2(optState, indices, coeffs, 2, fillIntercept, inf);
+                // Convert area fit to volume fit using station spacing (midpoint integration)
+                var nextStation = i < numStations - 1 ? vp.Stations[i + 1] : s;
+                var prevStation = i > 0 ? vp.Stations[i - 1] : s;
+                var length = (nextStation - prevStation) / 2.0;
+                var c = posCoeffs[0] * length;
+                var b = posCoeffs[1] * length;
+                var a = posCoeffs[2] * length;
+                
+                Debug.Assert(a > 0);
+
+                // Slack variable constraint: u_fill >= u
+                alglib.minqpaddlc2(optState, [uFill[i], u[i]], [1.0, -1.0], 2, 0, inf);
+                // Slack variable box: u_offset <= u_fill <= max_offset
+                alglib.minqpsetbci(optState, uFill[i], uOffset, track.MaxOffset);
+
+                // Quadratic volume constraint: v_fill - a*uf^2 - b*uf >= c
+                alglib.minqpaddqc2list(optState,
+                    [uFill[i]], [uFill[i]], [-a], 1, true,
+                    [uFill[i], vFill[i]], [-b, 1.0], 2,
+                    c, inf, false);
+
+                var k = Math.Max(Math.Abs(2 * a * track.MinOffset + b), Math.Abs(2 * a * track.MaxOffset + b));
+                vScaleFactors.Add(k);
             }
         }
+        #endregion
+
+        #region Variable Scaling
+        var scaling = new double[numVars];
+        Array.Fill(scaling, 1.0);
+
+        var sumDs = 0.0;
+        for (var i = 1; i < numStations; i++)
+            sumDs += vp.Stations[i] - vp.Stations[i - 1];
+        var meanDs = sumDs / (numStations - 1);
+
+        for (var i = 0; i < numSegments; i++)
+        {
+            scaling[a1[i]] = 1.0 / meanDs;
+            scaling[a2[i]] = 1.0 / (meanDs * meanDs);
+        }
+
+        // Clamp scale factors and compute RMS
+        var sumSq = 0.0;
+        for (var i = 0; i < vScaleFactors.Count; i++)
+        {
+            var v = Math.Max(Math.Min(vScaleFactors[i], 1e10), 1.0);
+            sumSq += v * v;
+        }
+        var vScaleMean = Math.Sqrt(sumSq / vScaleFactors.Count);
+
+        for (var i = 0; i < numStations; i++)
+        {
+            scaling[vCut[i]] = vScaleMean;
+            scaling[vFill[i]] = vScaleMean;
+            scaling[fuP[i]] = vScaleMean;
+            scaling[fuN[i]] = vScaleMean;
+            scaling[flP[i]] = vScaleMean;
+            scaling[flN[i]] = vScaleMean;
+            scaling[fbP[i]] = vScaleMean;
+            scaling[fbN[i]] = vScaleMean;
+            scaling[fwP[i]] = vScaleMean;
+            scaling[fwN[i]] = vScaleMean;
+        }
+
+        for (var i = 0; i < numSegments; i++)
+        {
+            scaling[ftP[i]] = vScaleMean;
+            scaling[ftN[i]] = vScaleMean;
+        }
+
+        alglib.minqpsetscale(optState, scaling);
         #endregion
 
         // Solve
         alglib.minqpoptimize(optState);
         alglib.minqpresults(optState, out var x, out var rep);
 
-        if (rep.terminationtype < 0)
+        if (rep.terminationtype <= 0)
         {
             Errors.Add($"QP solver failed with termination type {rep.terminationtype}");
             return null;
@@ -306,7 +399,10 @@ public class Optimiser
             vp.A2[i] = x[a2[i]];
         }
 
-        return new OptimiserResult { VerticalProfile = vp };
+        return new OptResult
+        {
+            VerticalProfiles = [vp]
+        };
 
         int[] CreateVariables(int n)
         {

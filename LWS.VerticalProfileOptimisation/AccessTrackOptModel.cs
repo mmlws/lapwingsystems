@@ -1,11 +1,14 @@
 namespace LWS.VerticalProfileOptimisation;
 
-public class AccessTrack
+public class AccessTrackOptModel
 {
     public required HorizontalAlignment Alignment;
     public required XSectionParams XSectionParams;
     public required OptCostModel CostModel;
 
+    public double StationSpacing = 20;
+    public int NumSamplesVerticalOffset = 20;
+    
     public double MinOffset = -5.0;
     public double MaxOffset = 5.0;
     public double GradientMin = -0.1;

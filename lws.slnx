@@ -11,6 +11,9 @@
   <Project Path="LWS.Fade25D.Test/LWS.Fade25D.Test.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>
+  <Project Path="LWS.VerticalProfileOptimisation.Tests/LWS.VerticalProfileOptimisation.Tests.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
   <Project Path="LWS.VerticalProfileOptimisation/LWS.VerticalProfileOptimisation.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>

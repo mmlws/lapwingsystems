@@ -92,6 +92,14 @@ namespace LWS::Fade25D {
             return gcnew TerrainMesh(&cloud);
         }
 
+        static TerrainMesh^ FromPoints(array<double>^ x, array<double>^ y, array<double>^ z) {
+            int n = x->Length;
+            CloudPrepare cloud;
+            for (int i = 0; i < n; i++)
+                cloud.add(x[i], y[i], z[i]);
+            return gcnew TerrainMesh(&cloud);
+        }
+
         size_t NumVertices() {
             return _num_vertices;
         }
