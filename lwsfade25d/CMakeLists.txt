@@ -20,12 +20,19 @@ add_library(lwsfade25d SHARED
     ${HEADERS}
 )
 
+set(DOTNET_TARGET_FRAMEWORK "net8.0")
+set(LWS_GEOMETRY_DLL "${CMAKE_SOURCE_DIR}/../LWS.Geometry/bin/$(Configuration)/${DOTNET_TARGET_FRAMEWORK}/LWS.Geometry.dll")
+
 set_target_properties(lwsfade25d PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     COMMON_LANGUAGE_RUNTIME "netcore"
-    DOTNET_TARGET_FRAMEWORK "net8.0"
+    DOTNET_TARGET_FRAMEWORK ${DOTNET_TARGET_FRAMEWORK}
+    VS_DOTNET_REFERENCE_LWS.Geometry ${LWS_GEOMETRY_DLL}
 )
+
+# LWS.Geometry managed assembly reference
+target_compile_options(lwsfade25d PRIVATE "/FU${LWS_GEOMETRY_DLL}")
 
 find_package(Fade25d REQUIRED)
 find_package(GDAL CONFIG REQUIRED)

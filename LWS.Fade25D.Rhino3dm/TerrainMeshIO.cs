@@ -1,5 +1,6 @@
 ﻿using Rhino.FileIO;
 using Rhino.Geometry;
+using LWS.Fade25D;
 
 namespace LWS.Fade25D.Rhino3dm;
 
@@ -12,15 +13,14 @@ public static class TerrainMeshIO
         var vertices = terrainMesh.GetVertices();
         for (var i = 0; i < vertices.Count; i++)
         {
-            var v = vertices.Get(i);
+            var v = vertices.GetPosition(i);
             mesh.Vertices.Add(v.X, v.Y, v.Z);
         }
 
-        var indexMap = vertices.CreateIndexMap();
         var triangles = terrainMesh.GetTriangles();
         for (var i = 0; i < triangles.Count; i++)
         {
-            var f = triangles.GetTriangle3i(indexMap, i);
+            var f = triangles.GetTriangle3i(i);
             mesh.Faces.AddFace(f.V0, f.V1, f.V2);
         }
 

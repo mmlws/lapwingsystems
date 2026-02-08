@@ -9,6 +9,7 @@
       "cacheVariables": {
         "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
         "FADE2D_PATH": "../fade25d",
+        "ALGLIB_PATH": "../alglib",
         "GDAL_PATH": "../vcpkg-export/share/gdal"
       }
     }

@@ -1,18 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <LangVersion>latest</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <RootNamespace>LWS.Fade25D.Rhino3dm</RootNamespace>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Rhino3dm" Version="8.17.0" />
-    </ItemGroup>
-
-    <ItemGroup>
+      <ProjectReference Include="..\LWS.Alglib\LWS.Alglib.csproj" />
       <ProjectReference Include="..\LWS.Geometry\LWS.Geometry.csproj" />
       <ProjectReference Include="..\lwsfade25d\build\lwsfade25d.vcxproj" />
     </ItemGroup>
