@@ -5,6 +5,9 @@
   </Configurations>
   <Project Path="LWS.Alglib/LWS.Alglib.csproj" />
   <Project Path="LWS.Geometry/LWS.Geometry.csproj" />
+  <Project Path="LWS.LandXML/LWS.LandXML.csproj" />
+  <Project Path="LWS.LandXML.Tests/LWS.LandXML.Tests.csproj" />
+  <Project Path="LWS.LandXML.Viewer/LWS.LandXML.Viewer.csproj" />
   <Project Path="LWS.Fade25D.Rhino3dm/LWS.Fade25D.Rhino3dm.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>
