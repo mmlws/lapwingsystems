@@ -20,7 +20,6 @@ public class XSectionWindow : ViewportWindow
 
     public XSectionWindow() : base("Cross-Section View")
     {
-        YFlipped = true;
     }
 
     protected override void DrawContent()

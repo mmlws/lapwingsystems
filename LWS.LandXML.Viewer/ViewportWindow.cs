@@ -17,7 +17,6 @@ public abstract class ViewportWindow
 
     protected Vector2 Offset; // camera offset in world units
     protected float Zoom = 1f;
-    protected bool YFlipped = false; // true for Profile/XSection where +Y = up
     public float YScale { get; set; } = 1f; // vertical exaggeration factor
 
     RenderTexture2D _renderTexture;
@@ -111,9 +110,7 @@ public abstract class ViewportWindow
         var cx = ContentSize.X / 2f;
         var cy = ContentSize.Y / 2f;
         var sx = cx + ((float)wx - Offset.X) * Zoom;
-        var sy = YFlipped
-            ? cy - ((float)wy - Offset.Y) * Zoom * YScale
-            : cy + ((float)wy - Offset.Y) * Zoom * YScale;
+        var sy = cy - ((float)wy - Offset.Y) * Zoom * YScale;
         return new Vector2(sx, sy);
     }
 
@@ -122,9 +119,7 @@ public abstract class ViewportWindow
         var cx = ContentSize.X / 2f;
         var cy = ContentSize.Y / 2f;
         var wx = (screen.X - cx) / Zoom + Offset.X;
-        var wy = YFlipped
-            ? -((screen.Y - cy) / (Zoom * YScale)) + Offset.Y
-            : (screen.Y - cy) / (Zoom * YScale) + Offset.Y;
+        var wy = -((screen.Y - cy) / (Zoom * YScale)) + Offset.Y;
         return (wx, wy);
     }
 
@@ -146,9 +141,7 @@ public abstract class ViewportWindow
             var mouseDelta = ImGui.GetMouseDragDelta(ImGuiMouseButton.Middle);
             if (mouseDelta.LengthSquared() > 0)
             {
-                var panDelta = YFlipped
-                    ? new Vector2(mouseDelta.X / Zoom, -mouseDelta.Y / (Zoom * YScale))
-                    : new Vector2(mouseDelta.X / Zoom, mouseDelta.Y / (Zoom * YScale));
+                var panDelta = new Vector2(mouseDelta.X / Zoom, -mouseDelta.Y / (Zoom * YScale));
                 Offset -= panDelta;
                 ImGui.ResetMouseDragDelta(ImGuiMouseButton.Middle);
             }
@@ -166,9 +159,7 @@ public abstract class ViewportWindow
             // Adjust offset so the world point under cursor stays put
             var newScreen = WorldToScreen(worldX, worldY);
             var screenDiff = localMouse - newScreen;
-            var correction = YFlipped
-                ? new Vector2(screenDiff.X / Zoom, -screenDiff.Y / (Zoom * YScale))
-                : new Vector2(screenDiff.X / Zoom, screenDiff.Y / (Zoom * YScale));
+            var correction = new Vector2(screenDiff.X / Zoom, -screenDiff.Y / (Zoom * YScale));
             Offset -= correction;
         }
 

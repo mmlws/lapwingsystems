@@ -53,15 +53,33 @@ public class LandXmlDocument
         var name = (string?)alignEl.Attribute("name") ?? "Unnamed";
         var staStart = ParseDouble((string?)alignEl.Attribute("staStart") ?? "0");
 
-        var lines = new List<CoordGeomLine>();
+        var coordGeomElements = new List<CoordGeomElement>();
         var coordGeomEl = alignEl.Element("CoordGeom");
         if (coordGeomEl != null)
         {
-            foreach (var lineEl in coordGeomEl.Elements("Line"))
+            foreach (var el in coordGeomEl.Elements())
             {
-                var start = ParsePoint(lineEl.Element("Start")!.Value);
-                var end = ParsePoint(lineEl.Element("End")!.Value);
-                lines.Add(new CoordGeomLine(start, end));
+                switch (el.Name.LocalName)
+                {
+                    case "Line":
+                    {
+                        var start = ParsePoint(el.Element("Start")!.Value);
+                        var end = ParsePoint(el.Element("End")!.Value);
+                        coordGeomElements.Add(new CoordGeomLine(start, end));
+                        break;
+                    }
+                    case "Curve":
+                    {
+                        var start = ParsePoint(el.Element("Start")!.Value);
+                        var end = ParsePoint(el.Element("End")!.Value);
+                        var centre = ParsePoint(el.Element("Center")!.Value);
+                        var rot = ParseRotationDirection(el.Attribute("rot")?.Value ?? "");
+                        coordGeomElements.Add(new CoordGeomCurve(start, end, centre, rot));
+                        break;
+                    }
+                    default:
+                        throw new Exception($"Unsupported alignment element type {el.Name.LocalName}");
+                }
             }
         }
 
@@ -69,7 +87,7 @@ public class LandXmlDocument
         {
             Name = name,
             StartStation = staStart,
-            Lines = lines
+            Elements = coordGeomElements
         };
 
         // Profile
@@ -171,6 +189,15 @@ public class LandXmlDocument
         return alignment;
     }
 
+    static RotationDirection ParseRotationDirection(string text)
+    {
+        if (string.Equals(text, "cw", StringComparison.InvariantCultureIgnoreCase))
+            return RotationDirection.Cw;
+        if (string.Equals(text, "ccw", StringComparison.InvariantCultureIgnoreCase))
+            return RotationDirection.CCw;
+        throw new Exception($"Unknown rotation direction '{text}'");
+    }
+
     /// <summary>Parse a LandXML point string "Northing Easting" → Pt2d(Easting, Northing).</summary>
     static Pt2d ParsePoint(string text)
     {
@@ -223,19 +250,28 @@ public class LandXmlDocument
             new XAttribute("length", Fmt(alignment.Length)),
             new XAttribute("staStart", Fmt(alignment.StartStation)));
 
-        if (alignment.Lines.Count > 0)
+        if (alignment.Elements.Count > 0)
         {
             var coordGeom = new XElement("CoordGeom");
-            foreach (var line in alignment.Lines)
+            foreach (var element in alignment.Elements)
             {
-                var dx = line.End.X - line.Start.X;
-                var dy = line.End.Y - line.Start.Y;
-                var len = Math.Sqrt(dx * dx + dy * dy);
-
-                coordGeom.Add(new XElement("Line",
-                    new XAttribute("length", Fmt(len)),
-                    new XElement("Start", FormatPoint(line.Start.X, line.Start.Y)),
-                    new XElement("End", FormatPoint(line.End.X, line.End.Y))));
+                switch (element)
+                {
+                    case CoordGeomLine line:
+                        coordGeom.Add(new XElement("Line",
+                            new XAttribute("length", Fmt(line.Length)),
+                            new XElement("Start", FormatPoint(line.Start)),
+                            new XElement("End", FormatPoint(line.End))));
+                        break;
+                    case CoordGeomCurve curve:
+                        coordGeom.Add(new XElement("Curve",
+                            new XAttribute("rot", curve.Rotation == RotationDirection.Cw ? "cw" : "ccw"),
+                            new XAttribute("length", Fmt(curve.Length)),
+                            new XElement("Start", FormatPoint(curve.Start)),
+                            new XElement("Center", FormatPoint(curve.Center)),
+                            new XElement("End", FormatPoint(curve.End))));
+                        break;
+                }
             }
 
             el.Add(coordGeom);
@@ -317,6 +353,8 @@ public class LandXmlDocument
 
     /// <summary>Format a coordinate as "Northing Easting" (Y X) per LandXML convention.</summary>
     static string FormatPoint(double x, double y) => $"{Fmt(y)} {Fmt(x)}";
+
+    static string FormatPoint(Pt2d pt) => FormatPoint(pt.X, pt.Y);
 
     static string Fmt(double value) => value.ToString("G", CultureInfo.InvariantCulture);
 }

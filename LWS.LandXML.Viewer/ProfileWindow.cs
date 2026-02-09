@@ -21,7 +21,6 @@ public class ProfileWindow : ViewportWindow
 
     public ProfileWindow() : base("Profile View")
     {
-        YFlipped = true;
     }
 
     protected override void DrawContent()

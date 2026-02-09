@@ -27,7 +27,7 @@ public class RoundTripTests : IDisposable
         {
             Name = "Road1",
             StartStation = 0,
-            Lines =
+            Elements =
             [
                 new CoordGeomLine(new Pt2d(100, 200), new Pt2d(300, 200)),
                 new CoordGeomLine(new Pt2d(300, 200), new Pt2d(500, 400))
@@ -58,13 +58,13 @@ public class RoundTripTests : IDisposable
         var a = loaded.Alignments[0];
         Assert.Equal("Road1", a.Name);
         Assert.Equal(0, a.StartStation);
-        Assert.Equal(2, a.Lines.Count);
+        Assert.Equal(2, a.Elements.Count);
 
         // Verify coordinates (LandXML stores as Northing Easting, parser swaps back)
-        Assert.Equal(100, a.Lines[0].Start.X, 6);
-        Assert.Equal(200, a.Lines[0].Start.Y, 6);
-        Assert.Equal(300, a.Lines[0].End.X, 6);
-        Assert.Equal(200, a.Lines[0].End.Y, 6);
+        Assert.Equal(100, a.Elements[0].Start.X, 6);
+        Assert.Equal(200, a.Elements[0].Start.Y, 6);
+        Assert.Equal(300, a.Elements[0].End.X, 6);
+        Assert.Equal(200, a.Elements[0].End.Y, 6);
 
         Assert.NotNull(a.Profile);
         Assert.Equal("Road1 Profile", a.Profile.Name);
@@ -78,6 +78,142 @@ public class RoundTripTests : IDisposable
     }
 
     [Fact]
+    public void CurveElement_RoundTrips()
+    {
+        var doc = new LandXmlDocument
+        {
+            ProjectName = "Curve Test",
+            LinearUnit = "meter"
+        };
+
+        // Line → CCW arc (90°) → Line, tangent at both junctions.
+        // Center (0,0), R=100.
+        // Arc start (100,0) angle=0, CCW tangent = (0,1) → incoming line direction (0,1).
+        // Arc end (0,100) angle=π/2, CCW tangent = (-1,0) → outgoing line direction (-1,0).
+        var alignment = new Alignment
+        {
+            Name = "CurveRoad",
+            StartStation = 0,
+            Elements =
+            [
+                new CoordGeomLine(new Pt2d(100, -200), new Pt2d(100, 0)),
+                new CoordGeomCurve(
+                    new Pt2d(100, 0),
+                    new Pt2d(0, 100),
+                    new Pt2d(0, 0),
+                    RotationDirection.CCw),
+                new CoordGeomLine(new Pt2d(0, 100), new Pt2d(-200, 100))
+            ]
+        };
+        doc.Alignments.Add(alignment);
+
+        var path = Path.Combine(_outputDir, "curve_element.xml");
+        doc.Save(path);
+
+        var loaded = LandXmlDocument.Load(path);
+
+        Assert.Single(loaded.Alignments);
+        var a = loaded.Alignments[0];
+        Assert.Equal("CurveRoad", a.Name);
+        Assert.Equal(3, a.Elements.Count);
+
+        // First element: line going up, tangent to arc at (100,0)
+        var line0 = Assert.IsType<CoordGeomLine>(a.Elements[0]);
+        Assert.Equal(100, line0.Start.X, 6);
+        Assert.Equal(-200, line0.Start.Y, 6);
+        Assert.Equal(100, line0.End.X, 6);
+        Assert.Equal(0, line0.End.Y, 6);
+        Assert.Equal(200, line0.Length, 6);
+
+        // Second element: CCW 90° arc
+        var curve = Assert.IsType<CoordGeomCurve>(a.Elements[1]);
+        Assert.Equal(100, curve.Start.X, 6);
+        Assert.Equal(0, curve.Start.Y, 6);
+        Assert.Equal(0, curve.End.X, 6);
+        Assert.Equal(100, curve.End.Y, 6);
+        Assert.Equal(0, curve.Center.X, 6);
+        Assert.Equal(0, curve.Center.Y, 6);
+        Assert.Equal(RotationDirection.CCw, curve.Rotation);
+        Assert.Equal(100, curve.Radius, 6);
+        // 90-degree arc at radius 100 → length = π/2 * 100
+        Assert.Equal(Math.PI / 2 * 100, curve.Length, 4);
+
+        // Third element: line going left, tangent to arc at (0,100)
+        var line1 = Assert.IsType<CoordGeomLine>(a.Elements[2]);
+        Assert.Equal(0, line1.Start.X, 6);
+        Assert.Equal(100, line1.Start.Y, 6);
+        Assert.Equal(-200, line1.End.X, 6);
+        Assert.Equal(100, line1.End.Y, 6);
+        Assert.Equal(200, line1.Length, 6);
+
+        // Total alignment length = 200 + π/2*100 + 200
+        Assert.Equal(200 + Math.PI / 2 * 100 + 200, a.Length, 4);
+    }
+
+    [Fact]
+    public void CwCurveElement_RoundTrips()
+    {
+        var doc = new LandXmlDocument { ProjectName = "CW Curve Test" };
+
+        // Line → CW arc (90°) → Line, tangent at both junctions.
+        // Mirror of the CCW test: both approach heading north, but this one
+        // turns RIGHT. Center is to the RIGHT (east) of travel.
+        // Center (100,0), R=100.
+        // Arc start (0,0) angle=π from center, CW tangent = (0,1) → incoming line heads north.
+        // Arc end (100,100) angle=π/2 from center, CW tangent = (1,0) → outgoing line heads east.
+        var alignment = new Alignment
+        {
+            Name = "CwRoad",
+            StartStation = 50,
+            Elements =
+            [
+                new CoordGeomLine(new Pt2d(0, -200), new Pt2d(0, 0)),
+                new CoordGeomCurve(
+                    new Pt2d(0, 0),
+                    new Pt2d(100, 100),
+                    new Pt2d(100, 0),
+                    RotationDirection.Cw),
+                new CoordGeomLine(new Pt2d(100, 100), new Pt2d(300, 100))
+            ]
+        };
+        doc.Alignments.Add(alignment);
+
+        var path = Path.Combine(_outputDir, "cw_curve_element.xml");
+        doc.Save(path);
+
+        var loaded = LandXmlDocument.Load(path);
+        var a = loaded.Alignments[0];
+        Assert.Equal("CwRoad", a.Name);
+        Assert.Equal(3, a.Elements.Count);
+
+        // First element: line going north, tangent to arc at (0,0)
+        var line0 = Assert.IsType<CoordGeomLine>(a.Elements[0]);
+        Assert.Equal(0, line0.Start.X, 6);
+        Assert.Equal(-200, line0.Start.Y, 6);
+        Assert.Equal(0, line0.End.X, 6);
+        Assert.Equal(0, line0.End.Y, 6);
+
+        // Second element: CW 90° arc, center to the right of travel
+        var curve = Assert.IsType<CoordGeomCurve>(a.Elements[1]);
+        Assert.Equal(100, curve.Center.X, 6);
+        Assert.Equal(0, curve.Center.Y, 6);
+        Assert.Equal(RotationDirection.Cw, curve.Rotation);
+        Assert.Equal(100, curve.Radius, 6);
+        Assert.Equal(Math.PI / 2 * 100, curve.Length, 4);
+
+        // Third element: line going east, tangent to arc at (100,100)
+        var line1 = Assert.IsType<CoordGeomLine>(a.Elements[2]);
+        Assert.Equal(100, line1.Start.X, 6);
+        Assert.Equal(100, line1.Start.Y, 6);
+        Assert.Equal(300, line1.End.X, 6);
+        Assert.Equal(100, line1.End.Y, 6);
+
+        // Total length = 200 + π/2*100 + 200
+        Assert.Equal(200 + Math.PI / 2 * 100 + 200, a.Length, 4);
+        Assert.Equal(50, a.StartStation);
+    }
+
+    [Fact]
     public void CrossSections_RoundTrip()
     {
         var doc = new LandXmlDocument { ProjectName = "XS Test" };
@@ -86,7 +222,7 @@ public class RoundTripTests : IDisposable
         {
             Name = "Road2",
             StartStation = 0,
-            Lines = [new CoordGeomLine(new Pt2d(0, 0), new Pt2d(200, 0))],
+            Elements = [new CoordGeomLine(new Pt2d(0, 0), new Pt2d(200, 0))],
             CrossSections =
             [
                 new CrossSect
@@ -171,7 +307,7 @@ public class RoundTripTests : IDisposable
         {
             Name = "A1",
             StartStation = 0,
-            Lines = [new CoordGeomLine(new Pt2d(0, 0), new Pt2d(500, 0))]
+            Elements = [new CoordGeomLine(new Pt2d(0, 0), new Pt2d(500, 0))]
         };
         alignment.Profile = new Profile
         {
@@ -222,7 +358,7 @@ public class RoundTripTests : IDisposable
         {
             Name = "A2",
             StartStation = 0,
-            Lines = [new CoordGeomLine(new Pt2d(0, 0), new Pt2d(400, 0))]
+            Elements = [new CoordGeomLine(new Pt2d(0, 0), new Pt2d(400, 0))]
         };
         alignment.Profile = new Profile
         {
@@ -276,7 +412,7 @@ public class RoundTripTests : IDisposable
         {
             Name = "A3",
             StartStation = 0,
-            Lines = [new CoordGeomLine(new Pt2d(0, 0), new Pt2d(600, 0))]
+            Elements = [new CoordGeomLine(new Pt2d(0, 0), new Pt2d(600, 0))]
         };
         alignment.Profile = new Profile
         {
@@ -343,14 +479,14 @@ public class RoundTripTests : IDisposable
 
             Assert.Equal(a1.Name, a2.Name);
             Assert.Equal(a1.StartStation, a2.StartStation);
-            Assert.Equal(a1.Lines.Count, a2.Lines.Count);
+            Assert.Equal(a1.Elements.Count, a2.Elements.Count);
 
-            for (var j = 0; j < a1.Lines.Count; j++)
+            for (var j = 0; j < a1.Elements.Count; j++)
             {
-                Assert.Equal(a1.Lines[j].Start.X, a2.Lines[j].Start.X, 6);
-                Assert.Equal(a1.Lines[j].Start.Y, a2.Lines[j].Start.Y, 6);
-                Assert.Equal(a1.Lines[j].End.X, a2.Lines[j].End.X, 6);
-                Assert.Equal(a1.Lines[j].End.Y, a2.Lines[j].End.Y, 6);
+                Assert.Equal(a1.Elements[j].Start.X, a2.Elements[j].Start.X, 6);
+                Assert.Equal(a1.Elements[j].Start.Y, a2.Elements[j].Start.Y, 6);
+                Assert.Equal(a1.Elements[j].End.X, a2.Elements[j].End.X, 6);
+                Assert.Equal(a1.Elements[j].End.Y, a2.Elements[j].End.Y, 6);
             }
 
             AssertProfilesEqual(a1.Profile, a2.Profile);
@@ -377,7 +513,7 @@ public class RoundTripTests : IDisposable
         {
             Name = "MainRoad",
             StartStation = 100,
-            Lines =
+            Elements =
             [
                 new CoordGeomLine(new Pt2d(1000, 2000), new Pt2d(1200, 2000)),
                 new CoordGeomLine(new Pt2d(1200, 2000), new Pt2d(1400, 2100))
@@ -410,7 +546,7 @@ public class RoundTripTests : IDisposable
         {
             Name = "AccessTrack",
             StartStation = 0,
-            Lines = [new CoordGeomLine(new Pt2d(1000, 2000), new Pt2d(1000, 2300))]
+            Elements = [new CoordGeomLine(new Pt2d(1000, 2000), new Pt2d(1000, 2300))]
         };
         access.Profile = new Profile
         {
